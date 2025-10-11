@@ -1,0 +1,38 @@
+# Rust build artifacts
+/target
+Cargo.lock
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment variables and secrets
+.env
+.env.local
+*.pem
+*.key
+
+# Test coverage reports
+tarpaulin-report.html
+cobertura.xml
+lcov.info
+
+# Profiling and benchmarking data
+flamegraph.svg
+perf.data
+perf.data.old
+*.profdata
+
+# Documentation build artifacts
+/target/doc
+
+# Temporary files
+*.tmp
+*.bak
+specs/
+.claude/
+.specify/
