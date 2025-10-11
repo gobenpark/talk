@@ -3,14 +3,14 @@
 // This module implements the guideline matching system that determines
 // which guideline should be activated based on user input.
 
+use crate::context::Context;
 use crate::error::Result;
 use crate::types::{GuidelineId, ToolId};
-use crate::context::Context;
+use aho_corasick::{AhoCorasick, AhoCorasickBuilder};
+use chrono::{DateTime, Utc};
+use regex::{Regex, RegexSet};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use chrono::{DateTime, Utc};
-use aho_corasick::{AhoCorasick, AhoCorasickBuilder};
-use regex::{Regex, RegexSet};
 use tracing::{debug, info, trace};
 
 /// Behavioral guideline defining when to activate and what to do
@@ -33,10 +33,7 @@ pub enum GuidelineCondition {
     /// Regex pattern match
     Regex(String),
     /// Semantic similarity match
-    Semantic {
-        description: String,
-        threshold: f32,
-    },
+    Semantic { description: String, threshold: f32 },
 }
 
 /// Action to take when guideline is activated
@@ -77,10 +74,7 @@ pub trait GuidelineMatcher: Send + Sync {
     ) -> Result<Vec<GuidelineMatch>>;
 
     /// Select the best matching guideline (by priority and relevance)
-    async fn select_best_match(
-        &self,
-        matches: Vec<GuidelineMatch>,
-    ) -> Option<GuidelineMatch>;
+    async fn select_best_match(&self, matches: Vec<GuidelineMatch>) -> Option<GuidelineMatch>;
 
     /// Add a guideline to the matcher
     async fn add_guideline(&mut self, guideline: Guideline) -> Result<GuidelineId>;
@@ -138,7 +132,8 @@ impl DefaultGuidelineMatcher {
         for (pattern, guideline_indices) in literal_to_guideline_map {
             let pattern_idx = literals.len();
             literals.push(pattern);
-            self.literal_pattern_to_guidelines.insert(pattern_idx, guideline_indices);
+            self.literal_pattern_to_guidelines
+                .insert(pattern_idx, guideline_indices);
         }
 
         if !literals.is_empty() {
@@ -170,15 +165,13 @@ impl DefaultGuidelineMatcher {
         for (pattern, guideline_indices) in regex_to_guideline_map {
             let pattern_idx = patterns.len();
             patterns.push(pattern);
-            self.regex_pattern_to_guidelines.insert(pattern_idx, guideline_indices);
+            self.regex_pattern_to_guidelines
+                .insert(pattern_idx, guideline_indices);
         }
 
         if !patterns.is_empty() {
             // Build individual regexes for extraction
-            self.individual_regexes = patterns
-                .iter()
-                .filter_map(|p| Regex::new(p).ok())
-                .collect();
+            self.individual_regexes = patterns.iter().filter_map(|p| Regex::new(p).ok()).collect();
 
             // Build regex set for fast matching
             self.regex_set = RegexSet::new(&patterns).ok();
@@ -198,7 +191,9 @@ impl DefaultGuidelineMatcher {
                 let pattern_idx = mat.pattern().as_usize();
 
                 // Get all guidelines that match this pattern
-                if let Some(guideline_indices) = self.literal_pattern_to_guidelines.get(&pattern_idx) {
+                if let Some(guideline_indices) =
+                    self.literal_pattern_to_guidelines.get(&pattern_idx)
+                {
                     for &guideline_idx in guideline_indices {
                         if let Some(guideline) = self.guidelines.get(guideline_idx) {
                             matches.push((guideline_idx, guideline));
@@ -218,7 +213,8 @@ impl DefaultGuidelineMatcher {
         if let Some(ref regex_set) = self.regex_set {
             for pattern_idx in regex_set.matches(message).into_iter() {
                 // Get all guidelines that match this pattern
-                if let Some(guideline_indices) = self.regex_pattern_to_guidelines.get(&pattern_idx) {
+                if let Some(guideline_indices) = self.regex_pattern_to_guidelines.get(&pattern_idx)
+                {
                     for &guideline_idx in guideline_indices {
                         if let Some(guideline) = self.guidelines.get(guideline_idx) {
                             matches.push((guideline_idx, guideline));
@@ -332,16 +328,16 @@ impl GuidelineMatcher for DefaultGuidelineMatcher {
         Ok(matches)
     }
 
-    async fn select_best_match(
-        &self,
-        mut matches: Vec<GuidelineMatch>,
-    ) -> Option<GuidelineMatch> {
+    async fn select_best_match(&self, mut matches: Vec<GuidelineMatch>) -> Option<GuidelineMatch> {
         if matches.is_empty() {
             debug!("No matches to select from");
             return None;
         }
 
-        debug!(candidate_count = matches.len(), "Selecting best match from candidates");
+        debug!(
+            candidate_count = matches.len(),
+            "Selecting best match from candidates"
+        );
 
         // Find corresponding guidelines and sort by priority and timestamp
         matches.sort_by(|a, b| {
@@ -366,7 +362,11 @@ impl GuidelineMatcher for DefaultGuidelineMatcher {
         let best = matches.into_iter().next();
 
         if let Some(ref selected) = best {
-            if let Some(guideline) = self.guidelines.iter().find(|g| g.id == selected.guideline_id) {
+            if let Some(guideline) = self
+                .guidelines
+                .iter()
+                .find(|g| g.id == selected.guideline_id)
+            {
                 info!(
                     selected_guideline_id = %selected.guideline_id,
                     priority = guideline.priority,
@@ -514,7 +514,10 @@ mod tests {
 
         let context = Context::new();
 
-        let matches = matcher.match_guidelines("What about pricing?", &context).await.unwrap();
+        let matches = matcher
+            .match_guidelines("What about pricing?", &context)
+            .await
+            .unwrap();
 
         // Should have 2 matches (both guidelines match "pricing")
         assert_eq!(matches.len(), 2, "Should match both guidelines");
@@ -527,6 +530,9 @@ mod tests {
 
         // select_best_match should pick the high priority one
         let best = matcher.select_best_match(matches).await.unwrap();
-        assert_eq!(best.guideline_id, high_id, "Should select high priority guideline");
+        assert_eq!(
+            best.guideline_id, high_id,
+            "Should select high priority guideline"
+        );
     }
 }

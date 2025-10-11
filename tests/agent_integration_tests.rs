@@ -1,13 +1,10 @@
 // Integration tests for Agent with Guidelines
 // TDD: These tests should FAIL before implementation
 
-use talk::{
-    Agent, Guideline, GuidelineCondition, GuidelineAction,
-    AgentConfig,
-};
-use std::time::Duration;
-use std::collections::HashMap;
 use chrono::Utc;
+use std::collections::HashMap;
+use std::time::Duration;
+use talk::{Agent, AgentConfig, Guideline, GuidelineAction, GuidelineCondition};
 
 // T024: Integration test for fallback guideline when no match
 #[tokio::test]
@@ -28,18 +25,32 @@ async fn test_fallback_guideline_when_no_match() {
         parameters: HashMap::new(),
         created_at: Utc::now(),
     };
-    agent.add_guideline(guideline).await.expect("Failed to add guideline");
+    agent
+        .add_guideline(guideline)
+        .await
+        .expect("Failed to add guideline");
 
     // Create session
-    let session_id = agent.create_session().await.expect("Failed to create session");
+    let session_id = agent
+        .create_session()
+        .await
+        .expect("Failed to create session");
 
     // Process message that doesn't match any guideline - should use fallback
-    let response = agent.process_message(session_id, "Tell me about your company".to_string()).await
+    let response = agent
+        .process_message(session_id, "Tell me about your company".to_string())
+        .await
         .expect("Failed to process message");
 
     // Fallback should provide some response
-    assert!(!response.message.is_empty(), "Fallback should provide a response");
-    assert!(response.matched_guideline.is_some(), "Should match fallback guideline");
+    assert!(
+        !response.message.is_empty(),
+        "Fallback should provide a response"
+    );
+    assert!(
+        response.matched_guideline.is_some(),
+        "Should match fallback guideline"
+    );
 }
 
 // T025: End-to-end agent test with multiple guidelines
@@ -76,29 +87,60 @@ async fn test_agent_with_multiple_guidelines() {
         created_at: Utc::now(),
     };
 
-    agent.add_guideline(pricing_guideline.clone()).await.expect("Failed to add guideline");
-    agent.add_guideline(support_guideline.clone()).await.expect("Failed to add guideline");
+    agent
+        .add_guideline(pricing_guideline.clone())
+        .await
+        .expect("Failed to add guideline");
+    agent
+        .add_guideline(support_guideline.clone())
+        .await
+        .expect("Failed to add guideline");
 
     // Create session
-    let session_id = agent.create_session().await.expect("Failed to create session");
+    let session_id = agent
+        .create_session()
+        .await
+        .expect("Failed to create session");
 
     // Test pricing guideline
-    let response1 = agent.process_message(session_id, "What is your pricing?".to_string()).await
+    let response1 = agent
+        .process_message(session_id, "What is your pricing?".to_string())
+        .await
         .expect("Failed to process message");
-    assert!(response1.message.contains("$49/month"), "Should respond with pricing info");
-    assert_eq!(response1.matched_guideline.as_ref().unwrap().guideline_id, pricing_guideline.id);
+    assert!(
+        response1.message.contains("$49/month"),
+        "Should respond with pricing info"
+    );
+    assert_eq!(
+        response1.matched_guideline.as_ref().unwrap().guideline_id,
+        pricing_guideline.id
+    );
 
     // Test support guideline
-    let response2 = agent.process_message(session_id, "I need help with something".to_string()).await
+    let response2 = agent
+        .process_message(session_id, "I need help with something".to_string())
+        .await
         .expect("Failed to process message");
-    assert!(response2.message.contains("How can I help"), "Should respond with support message");
-    assert_eq!(response2.matched_guideline.as_ref().unwrap().guideline_id, support_guideline.id);
+    assert!(
+        response2.message.contains("How can I help"),
+        "Should respond with support message"
+    );
+    assert_eq!(
+        response2.matched_guideline.as_ref().unwrap().guideline_id,
+        support_guideline.id
+    );
 
     // Verify session maintains context
-    let session = agent.get_session(&session_id).await
+    let session = agent
+        .get_session(&session_id)
+        .await
         .expect("Failed to get session")
         .expect("Session should exist");
-    assert_eq!(session.context.messages.len(), 4, "Should have 2 user + 2 agent messages");
+    assert_eq!(
+        session.context.messages.len(),
+        4,
+        "Should have 2 user + 2 agent messages"
+    );
 }
 
 // Helper function to create test agent
@@ -132,10 +174,10 @@ impl talk::LLMProvider for MockProvider {
 
     async fn stream(
         &self,
-        _messages: Vec<talk::Message>
+        _messages: Vec<talk::Message>,
     ) -> Result<
         std::pin::Pin<Box<dyn futures::Stream<Item = Result<String, talk::AgentError>> + Send>>,
-        talk::AgentError
+        talk::AgentError,
     > {
         unimplemented!("Stream not needed for tests")
     }
@@ -158,6 +200,6 @@ fn create_mock_provider() -> MockProvider {
             top_p: None,
             frequency_penalty: None,
             presence_penalty: None,
-        }
+        },
     }
 }

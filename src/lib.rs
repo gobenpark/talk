@@ -43,16 +43,25 @@ pub mod agent;
 // Tool integration
 pub mod tool;
 
+// Journey system
+pub mod journey;
+
 // Public API exports will be added as modules are implemented
-pub use agent::{Agent, AgentBuilder, AgentConfig, AgentResponse, LogLevel, ResponseExplanation, ToolExecution};
+pub use agent::{
+    Agent, AgentBuilder, AgentConfig, AgentResponse, LogLevel, ResponseExplanation, ToolExecution,
+};
 pub use context::{Context, ContextVariable, Message, MessageRole, Validator};
 pub use error::{AgentError, GuidelineError, JourneyError, Result, StorageError, ToolError};
 pub use guideline::{
     DefaultGuidelineMatcher, Guideline, GuidelineAction, GuidelineCondition, GuidelineMatch,
     GuidelineMatcher, ParameterDef,
 };
-pub use provider::{LLMProvider, ProviderConfig, StreamChunk};
-pub use session::{JourneyState, Session, SessionStatus};
+pub use journey::{
+    DefaultJourneyManager, Journey, JourneyManager, JourneyState, JourneyStep, Transition,
+    TransitionCondition,
+};
+pub use provider::{AnthropicProvider, LLMProvider, OpenAIProvider, ProviderConfig, StreamChunk};
+pub use session::{Session, SessionStatus};
 pub use storage::{memory::InMemorySessionStore, SessionStore};
 pub use tool::{ParameterSchema, Tool, ToolRegistry, ToolResult};
 pub use types::*;

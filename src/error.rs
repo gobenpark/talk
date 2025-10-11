@@ -13,6 +13,10 @@ pub enum AgentError {
     #[error("LLM provider error: {0}")]
     LLMProvider(#[from] Box<dyn std::error::Error + Send + Sync>),
 
+    /// Provider error (for specific provider failures)
+    #[error("Provider error: {0}")]
+    ProviderError(String),
+
     /// Session not found
     #[error("Session not found: {0}")]
     SessionNotFound(SessionId),
@@ -36,6 +40,10 @@ pub enum AgentError {
     /// Journey execution error
     #[error("Journey execution error: {0}")]
     JourneyExecution(#[from] JourneyError),
+
+    /// Journey error (simple string message)
+    #[error("Journey error: {0}")]
+    Journey(String),
 
     /// Storage error
     #[error("Storage error: {0}")]
@@ -63,17 +71,11 @@ pub enum AgentError {
 
     /// Tool execution failed
     #[error("Tool execution failed for {tool_name}: {reason}")]
-    ToolExecutionFailed {
-        tool_name: String,
-        reason: String,
-    },
+    ToolExecutionFailed { tool_name: String, reason: String },
 
     /// Invalid tool parameters
     #[error("Invalid tool parameters for {tool_name}: {reason}")]
-    InvalidToolParameters {
-        tool_name: String,
-        reason: String,
-    },
+    InvalidToolParameters { tool_name: String, reason: String },
 
     /// Tool execution timeout
     #[error("Tool execution timeout for {tool_name} after {timeout:?}")]

@@ -2,12 +2,12 @@
 // These tests define the expected behavior for guidelines
 // TDD: These tests should FAIL before implementation
 
-use talk::{
-    Guideline, GuidelineCondition, GuidelineAction, GuidelineMatcher, DefaultGuidelineMatcher,
-    GuidelineMatch, Context, SessionId, GuidelineId, MessageRole, Message,
-};
-use std::collections::HashMap;
 use chrono::Utc;
+use std::collections::HashMap;
+use talk::{
+    Context, DefaultGuidelineMatcher, Guideline, GuidelineAction, GuidelineCondition, GuidelineId,
+    GuidelineMatch, GuidelineMatcher, Message, MessageRole, SessionId,
+};
 
 // T020: Contract test for Guideline API
 #[tokio::test]
@@ -16,14 +16,19 @@ async fn test_guideline_api_contract() {
 
     // Test add_guideline
     let guideline = create_test_guideline("pricing", "Pricing starts at $49/month");
-    let guideline_id = matcher.add_guideline(guideline).await.expect("Failed to add guideline");
+    let guideline_id = matcher
+        .add_guideline(guideline)
+        .await
+        .expect("Failed to add guideline");
 
     // GuidelineId is always valid after creation
     assert!(true, "Should return valid guideline ID");
 
     // Test match_guidelines
     let context = create_test_context();
-    let matches = matcher.match_guidelines("What is the pricing?", &context).await
+    let matches = matcher
+        .match_guidelines("What is the pricing?", &context)
+        .await
         .expect("Failed to match guidelines");
 
     assert!(!matches.is_empty(), "Should find at least one match");
@@ -53,18 +58,28 @@ async fn test_literal_condition_matching() {
         created_at: Utc::now(),
     };
 
-    matcher.add_guideline(guideline).await.expect("Failed to add guideline");
+    matcher
+        .add_guideline(guideline)
+        .await
+        .expect("Failed to add guideline");
 
     let context = create_test_context();
 
     // Should match
-    let matches = matcher.match_guidelines("What is your pricing?", &context).await
+    let matches = matcher
+        .match_guidelines("What is your pricing?", &context)
+        .await
         .expect("Failed to match");
     assert_eq!(matches.len(), 1, "Should match literal condition");
-    assert_eq!(matches[0].relevance_score, 1.0, "Literal match should have score 1.0");
+    assert_eq!(
+        matches[0].relevance_score, 1.0,
+        "Literal match should have score 1.0"
+    );
 
     // Should not match
-    let no_matches = matcher.match_guidelines("Tell me about features", &context).await
+    let no_matches = matcher
+        .match_guidelines("Tell me about features", &context)
+        .await
         .expect("Failed to match");
     assert!(no_matches.is_empty(), "Should not match unrelated message");
 }
@@ -89,20 +104,33 @@ async fn test_regex_condition_matching() {
         created_at: Utc::now(),
     };
 
-    matcher.add_guideline(guideline).await.expect("Failed to add guideline");
+    matcher
+        .add_guideline(guideline)
+        .await
+        .expect("Failed to add guideline");
 
     let context = create_test_context();
 
     // Should match
-    let matches = matcher.match_guidelines("I want to cancel my subscription", &context).await
+    let matches = matcher
+        .match_guidelines("I want to cancel my subscription", &context)
+        .await
         .expect("Failed to match");
     assert_eq!(matches.len(), 1, "Should match regex condition");
-    assert_eq!(matches[0].relevance_score, 0.9, "Regex match should have score 0.9");
+    assert_eq!(
+        matches[0].relevance_score, 0.9,
+        "Regex match should have score 0.9"
+    );
 
     // Should not match
-    let no_matches = matcher.match_guidelines("I love my subscription", &context).await
+    let no_matches = matcher
+        .match_guidelines("I love my subscription", &context)
+        .await
         .expect("Failed to match");
-    assert!(no_matches.is_empty(), "Should not match when pattern doesn't match");
+    assert!(
+        no_matches.is_empty(),
+        "Should not match when pattern doesn't match"
+    );
 }
 
 // T023: Integration test for priority resolution
@@ -140,19 +168,32 @@ async fn test_guideline_priority_resolution() {
         created_at: Utc::now(),
     };
 
-    matcher.add_guideline(low_priority.clone()).await.expect("Failed to add guideline");
-    matcher.add_guideline(high_priority.clone()).await.expect("Failed to add guideline");
+    matcher
+        .add_guideline(low_priority.clone())
+        .await
+        .expect("Failed to add guideline");
+    matcher
+        .add_guideline(high_priority.clone())
+        .await
+        .expect("Failed to add guideline");
 
     let context = create_test_context();
-    let matches = matcher.match_guidelines("What about pricing?", &context).await
+    let matches = matcher
+        .match_guidelines("What about pricing?", &context)
+        .await
         .expect("Failed to match");
 
     assert_eq!(matches.len(), 2, "Should match both guidelines");
 
-    let best_match = matcher.select_best_match(matches).await
+    let best_match = matcher
+        .select_best_match(matches)
+        .await
         .expect("Should select best match");
 
-    assert_eq!(best_match.guideline_id, high_priority.id, "Should select high priority guideline");
+    assert_eq!(
+        best_match.guideline_id, high_priority.id,
+        "Should select high priority guideline"
+    );
 }
 
 // Helper functions

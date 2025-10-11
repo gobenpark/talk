@@ -3,6 +3,12 @@
 //! This module provides a trait-based abstraction for LLM providers,
 //! allowing the agent to work with different LLM backends (OpenAI, Anthropic, etc.).
 
+pub mod anthropic;
+pub mod openai;
+
+pub use anthropic::AnthropicProvider;
+pub use openai::OpenAIProvider;
+
 use crate::context::{Message, MessageRole};
 use crate::error::AgentError;
 use async_trait::async_trait;

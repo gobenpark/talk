@@ -46,16 +46,10 @@ pub trait Tool: Send + Sync {
     fn parameters(&self) -> &HashMap<String, ParameterSchema>;
 
     /// Execute the tool with given parameters
-    async fn execute(
-        &self,
-        parameters: HashMap<String, serde_json::Value>,
-    ) -> Result<ToolResult>;
+    async fn execute(&self, parameters: HashMap<String, serde_json::Value>) -> Result<ToolResult>;
 
     /// Validate parameters before execution
-    fn validate_parameters(
-        &self,
-        parameters: &HashMap<String, serde_json::Value>,
-    ) -> Result<()> {
+    fn validate_parameters(&self, parameters: &HashMap<String, serde_json::Value>) -> Result<()> {
         trace!(tool_name = %self.name(), "Validating tool parameters");
 
         let schema = self.parameters();
@@ -106,10 +100,7 @@ pub trait Tool: Send + Sync {
     }
 
     /// Apply default values to parameters
-    fn apply_defaults(
-        &self,
-        parameters: &mut HashMap<String, serde_json::Value>,
-    ) {
+    fn apply_defaults(&self, parameters: &mut HashMap<String, serde_json::Value>) {
         let schema = self.parameters();
 
         for (param_name, param_schema) in schema {
@@ -299,7 +290,9 @@ impl ToolRegistry {
                 );
 
                 let tool = self.get(tool_id).await;
-                let tool_name = tool.map(|t| t.name().to_string()).unwrap_or_else(|| "unknown".to_string());
+                let tool_name = tool
+                    .map(|t| t.name().to_string())
+                    .unwrap_or_else(|| "unknown".to_string());
 
                 Err(AgentError::ToolTimeout {
                     tool_name,
@@ -307,6 +300,112 @@ impl ToolRegistry {
                 })
             }
         }
+    }
+
+    /// Execute a tool with retry logic and exponential backoff
+    ///
+    /// # Arguments
+    ///
+    /// * `tool_id` - The ID of the tool to execute
+    /// * `parameters` - Parameters for tool execution
+    /// * `timeout_duration` - Maximum time for each attempt
+    /// * `max_retries` - Maximum number of retry attempts (0 means no retries)
+    /// * `base_backoff_ms` - Base backoff time in milliseconds
+    ///
+    /// # Returns
+    ///
+    /// The tool result or an error if all attempts fail
+    pub async fn execute_with_retry(
+        &self,
+        tool_id: &ToolId,
+        parameters: HashMap<String, serde_json::Value>,
+        timeout_duration: Duration,
+        max_retries: u32,
+        base_backoff_ms: u64,
+    ) -> Result<ToolResult> {
+        let mut attempts = 0;
+        let mut last_error = None;
+
+        while attempts <= max_retries {
+            info!(
+                tool_id = %tool_id,
+                attempt = attempts + 1,
+                max_attempts = max_retries + 1,
+                "Attempting tool execution"
+            );
+
+            match self
+                .execute_with_timeout(tool_id, parameters.clone(), timeout_duration)
+                .await
+            {
+                Ok(result) => {
+                    // Check if the result indicates an error
+                    if result.error.is_none() {
+                        debug!(
+                            tool_id = %tool_id,
+                            attempts = attempts + 1,
+                            "Tool execution successful"
+                        );
+                        return Ok(result);
+                    } else {
+                        warn!(
+                            tool_id = %tool_id,
+                            attempt = attempts + 1,
+                            error = %result.error.as_ref().unwrap(),
+                            "Tool returned error result"
+                        );
+                        last_error = Some(AgentError::ToolExecutionFailed {
+                            tool_name: self
+                                .get(tool_id)
+                                .await
+                                .map(|t| t.name().to_string())
+                                .unwrap_or_else(|| "unknown".to_string()),
+                            reason: result.error.unwrap(),
+                        });
+                    }
+                }
+                Err(e) => {
+                    warn!(
+                        tool_id = %tool_id,
+                        attempt = attempts + 1,
+                        error = %e,
+                        "Tool execution failed"
+                    );
+                    last_error = Some(e);
+                }
+            }
+
+            attempts += 1;
+
+            // Don't sleep after the last attempt
+            if attempts <= max_retries {
+                // Calculate exponential backoff: base * 2^attempt
+                let backoff_ms = base_backoff_ms * 2u64.pow(attempts - 1);
+                let backoff = Duration::from_millis(backoff_ms);
+
+                debug!(
+                    tool_id = %tool_id,
+                    backoff_ms = backoff_ms,
+                    "Waiting before retry"
+                );
+
+                tokio::time::sleep(backoff).await;
+            }
+        }
+
+        // All retries exhausted
+        warn!(
+            tool_id = %tool_id,
+            total_attempts = attempts,
+            "All retry attempts exhausted"
+        );
+
+        Err(
+            last_error.unwrap_or_else(|| AgentError::ToolExecutionFailed {
+                tool_name: "unknown".to_string(),
+                reason: "All retry attempts failed".to_string(),
+            }),
+        )
     }
 }
 
@@ -415,5 +514,268 @@ mod tests {
 
         assert!(!validate_type(&serde_json::json!(123), "string"));
         assert!(!validate_type(&serde_json::json!("hello"), "number"));
+    }
+
+    // Test tools for timeout and retry testing
+    struct SlowTool {
+        id: ToolId,
+        delay: Duration,
+        parameters: HashMap<String, ParameterSchema>,
+    }
+
+    impl SlowTool {
+        fn new_with_delay(delay: Duration) -> Self {
+            Self {
+                id: ToolId::new(),
+                delay,
+                parameters: HashMap::new(),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl Tool for SlowTool {
+        fn id(&self) -> &ToolId {
+            &self.id
+        }
+
+        fn name(&self) -> &str {
+            "slow"
+        }
+
+        fn description(&self) -> &str {
+            "A slow tool for timeout testing"
+        }
+
+        fn parameters(&self) -> &HashMap<String, ParameterSchema> {
+            &self.parameters
+        }
+
+        async fn execute(
+            &self,
+            _parameters: HashMap<String, serde_json::Value>,
+        ) -> Result<ToolResult> {
+            tokio::time::sleep(self.delay).await;
+            Ok(ToolResult {
+                output: serde_json::json!({ "result": "slow execution completed" }),
+                error: None,
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    struct FlakyTool {
+        id: ToolId,
+        failure_count: Arc<tokio::sync::Mutex<u32>>,
+        fail_until: u32,
+        parameters: HashMap<String, ParameterSchema>,
+    }
+
+    impl FlakyTool {
+        fn new_with_failures(fail_until: u32) -> Self {
+            Self {
+                id: ToolId::new(),
+                failure_count: Arc::new(tokio::sync::Mutex::new(0)),
+                fail_until,
+                parameters: HashMap::new(),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl Tool for FlakyTool {
+        fn id(&self) -> &ToolId {
+            &self.id
+        }
+
+        fn name(&self) -> &str {
+            "flaky"
+        }
+
+        fn description(&self) -> &str {
+            "A flaky tool for retry testing"
+        }
+
+        fn parameters(&self) -> &HashMap<String, ParameterSchema> {
+            &self.parameters
+        }
+
+        async fn execute(
+            &self,
+            _parameters: HashMap<String, serde_json::Value>,
+        ) -> Result<ToolResult> {
+            let mut count = self.failure_count.lock().await;
+            *count += 1;
+
+            if *count <= self.fail_until {
+                Ok(ToolResult {
+                    output: serde_json::json!({}),
+                    error: Some(format!("Simulated failure #{}", *count)),
+                    metadata: HashMap::new(),
+                })
+            } else {
+                Ok(ToolResult {
+                    output: serde_json::json!({ "result": "success after retries" }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_tool_timeout() {
+        let registry = ToolRegistry::new();
+
+        // Create a slow tool that takes 2 seconds
+        let slow_tool = SlowTool::new_with_delay(Duration::from_secs(2));
+        let tool_id = slow_tool.id;
+
+        registry.register(Box::new(slow_tool)).await.unwrap();
+
+        // Execute with 1 second timeout - should timeout
+        let result = registry
+            .execute_with_timeout(&tool_id, HashMap::new(), Duration::from_secs(1))
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AgentError::ToolTimeout { tool_name, timeout } => {
+                assert_eq!(tool_name, "slow");
+                assert_eq!(timeout, Duration::from_secs(1));
+            }
+            _ => panic!("Expected ToolTimeout error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_tool_timeout_success() {
+        let registry = ToolRegistry::new();
+
+        // Create a slow tool that takes 1 second
+        let slow_tool = SlowTool::new_with_delay(Duration::from_secs(1));
+        let tool_id = slow_tool.id;
+
+        registry.register(Box::new(slow_tool)).await.unwrap();
+
+        // Execute with 2 second timeout - should succeed
+        let result = registry
+            .execute_with_timeout(&tool_id, HashMap::new(), Duration::from_secs(2))
+            .await;
+
+        assert!(result.is_ok());
+        let tool_result = result.unwrap();
+        assert!(tool_result.error.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_tool_retry_success_first_attempt() {
+        let registry = ToolRegistry::new();
+
+        // Create a tool that succeeds immediately
+        let fast_tool = SlowTool::new_with_delay(Duration::from_millis(10));
+        let tool_id = fast_tool.id;
+
+        registry.register(Box::new(fast_tool)).await.unwrap();
+
+        // Should succeed on first attempt
+        let result = registry
+            .execute_with_retry(
+                &tool_id,
+                HashMap::new(),
+                Duration::from_secs(1),
+                3,   // max retries
+                100, // base backoff ms
+            )
+            .await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_tool_retry_success_after_failures() {
+        let registry = ToolRegistry::new();
+
+        // Create a flaky tool that fails 2 times then succeeds
+        let flaky_tool = FlakyTool::new_with_failures(2);
+        let tool_id = flaky_tool.id;
+
+        registry.register(Box::new(flaky_tool)).await.unwrap();
+
+        // Should succeed on third attempt
+        let result = registry
+            .execute_with_retry(
+                &tool_id,
+                HashMap::new(),
+                Duration::from_secs(1),
+                3,  // max retries - allows up to 4 total attempts
+                50, // base backoff ms
+            )
+            .await;
+
+        assert!(result.is_ok());
+        let tool_result = result.unwrap();
+        assert!(tool_result.error.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_tool_retry_all_attempts_fail() {
+        let registry = ToolRegistry::new();
+
+        // Create a flaky tool that always fails
+        let flaky_tool = FlakyTool::new_with_failures(10); // Always fail
+        let tool_id = flaky_tool.id;
+
+        registry.register(Box::new(flaky_tool)).await.unwrap();
+
+        // All attempts should fail
+        let result = registry
+            .execute_with_retry(
+                &tool_id,
+                HashMap::new(),
+                Duration::from_secs(1),
+                2,  // max retries - allows up to 3 total attempts
+                50, // base backoff ms
+            )
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AgentError::ToolExecutionFailed { tool_name, reason } => {
+                assert_eq!(tool_name, "flaky");
+                assert!(reason.contains("Simulated failure"));
+            }
+            _ => panic!("Expected ToolExecutionFailed error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_tool_retry_exponential_backoff() {
+        let registry = ToolRegistry::new();
+
+        // Create a flaky tool that fails twice
+        let flaky_tool = FlakyTool::new_with_failures(2);
+        let tool_id = flaky_tool.id;
+
+        registry.register(Box::new(flaky_tool)).await.unwrap();
+
+        let start = std::time::Instant::now();
+
+        // Should retry with exponential backoff: 100ms, 200ms
+        registry
+            .execute_with_retry(
+                &tool_id,
+                HashMap::new(),
+                Duration::from_secs(1),
+                2,   // max retries
+                100, // base backoff ms
+            )
+            .await
+            .unwrap();
+
+        let elapsed = start.elapsed();
+
+        // Total backoff should be at least 300ms (100ms + 200ms)
+        assert!(elapsed >= Duration::from_millis(300));
     }
 }
