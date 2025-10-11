@@ -2,8 +2,8 @@
 // TDD: These tests should FAIL before implementation
 
 use talk::{
-    Agent, AgentBuilder, Guideline, GuidelineCondition, GuidelineAction,
-    SessionId, MessageRole, AgentConfig,
+    Agent, Guideline, GuidelineCondition, GuidelineAction,
+    AgentConfig,
 };
 use std::time::Duration;
 use std::collections::HashMap;
@@ -120,11 +120,13 @@ async fn create_test_agent() -> Agent {
 }
 
 // Mock provider for testing (doesn't call real LLM)
-struct MockProvider;
+struct MockProvider {
+    config: talk::ProviderConfig,
+}
 
 #[async_trait::async_trait]
 impl talk::LlmProvider for MockProvider {
-    async fn complete(&self, _messages: Vec<talk::Message>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn complete(&self, _messages: Vec<talk::Message>) -> Result<String, talk::AgentError> {
         Ok("Mock LLM response".to_string())
     }
 
@@ -132,8 +134,8 @@ impl talk::LlmProvider for MockProvider {
         &self,
         _messages: Vec<talk::Message>
     ) -> Result<
-        std::pin::Pin<Box<dyn futures::Stream<Item = Result<String, Box<dyn std::error::Error + Send + Sync>>> + Send>>,
-        Box<dyn std::error::Error + Send + Sync>
+        std::pin::Pin<Box<dyn futures::Stream<Item = Result<String, talk::AgentError>> + Send>>,
+        talk::AgentError
     > {
         unimplemented!("Stream not needed for tests")
     }
@@ -143,15 +145,19 @@ impl talk::LlmProvider for MockProvider {
     }
 
     fn config(&self) -> &talk::ProviderConfig {
-        &talk::ProviderConfig {
-            model: "mock".to_string(),
-            temperature: 0.7,
-            max_tokens: 1000,
-            timeout: Duration::from_secs(30),
-        }
+        &self.config
     }
 }
 
 fn create_mock_provider() -> MockProvider {
-    MockProvider
+    MockProvider {
+        config: talk::ProviderConfig {
+            model: "mock".to_string(),
+            temperature: 0.7,
+            max_tokens: Some(1000),
+            top_p: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+        }
+    }
 }

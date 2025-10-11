@@ -40,6 +40,9 @@ pub mod guideline;
 // Agent core
 pub mod agent;
 
+// Tool integration
+pub mod tool;
+
 // Public API exports will be added as modules are implemented
 pub use agent::{Agent, AgentBuilder, AgentConfig, AgentResponse, LogLevel, ResponseExplanation, ToolExecution};
 pub use context::{Context, ContextVariable, Message, MessageRole, Validator};
@@ -51,4 +54,5 @@ pub use guideline::{
 pub use provider::{LlmProvider, ProviderConfig, StreamChunk};
 pub use session::{JourneyState, Session, SessionStatus};
 pub use storage::{memory::InMemorySessionStore, SessionStore};
+pub use tool::{ParameterSchema, Tool, ToolRegistry, ToolResult};
 pub use types::*;

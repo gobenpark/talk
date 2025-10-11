@@ -3,7 +3,7 @@
 // This module implements the main Agent struct that orchestrates guidelines,
 // tools, journeys, and LLM interactions.
 
-use crate::context::{Context, Message, MessageRole};
+use crate::context::{Context, Message};
 use crate::error::{AgentError, Result};
 use crate::guideline::{Guideline, GuidelineMatch, GuidelineMatcher, DefaultGuidelineMatcher, GuidelineCondition, GuidelineAction};
 use crate::provider::LlmProvider;
@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
+use tracing::{debug, info, trace};
 
 /// Log level for agent operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -180,10 +181,22 @@ impl Agent {
         session_id: SessionId,
         user_message: String,
     ) -> Result<AgentResponse> {
+        info!(
+            session_id = %session_id,
+            message_length = user_message.len(),
+            "Processing user message"
+        );
+
         // Get session
         let mut session = self.session_store.get(&session_id).await
             .map_err(|e| AgentError::Storage(e))?
             .ok_or_else(|| AgentError::SessionNotFound(session_id))?;
+
+        debug!(
+            session_status = ?session.status,
+            message_count = session.context.messages.len(),
+            "Session retrieved"
+        );
 
         // Add user message to context
         let user_msg = Message::user(user_message.clone());
@@ -191,6 +204,7 @@ impl Agent {
 
         // Match guidelines
         let matcher = self.guideline_matcher.read().await;
+        trace!("Acquired guideline matcher lock");
         let matches = matcher.match_guidelines(&user_message, &session.context).await?;
 
         // Select best match or use fallback

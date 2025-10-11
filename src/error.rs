@@ -53,6 +53,35 @@ pub enum AgentError {
     #[error("Invalid input: {0}")]
     InvalidInput(String),
 
+    /// Tool not found
+    #[error("Tool not found: {0}")]
+    ToolNotFound(ToolId),
+
+    /// Tool already registered with same name
+    #[error("Tool already registered: {0}")]
+    ToolAlreadyRegistered(String),
+
+    /// Tool execution failed
+    #[error("Tool execution failed for {tool_name}: {reason}")]
+    ToolExecutionFailed {
+        tool_name: String,
+        reason: String,
+    },
+
+    /// Invalid tool parameters
+    #[error("Invalid tool parameters for {tool_name}: {reason}")]
+    InvalidToolParameters {
+        tool_name: String,
+        reason: String,
+    },
+
+    /// Tool execution timeout
+    #[error("Tool execution timeout for {tool_name} after {timeout:?}")]
+    ToolTimeout {
+        tool_name: String,
+        timeout: std::time::Duration,
+    },
+
     /// Internal error (should not happen in normal operation)
     #[error("Internal error: {0}")]
     Internal(String),

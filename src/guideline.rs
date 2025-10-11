@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder};
 use regex::{Regex, RegexSet};
+use tracing::{debug, info, trace};
 
 /// Behavioral guideline defining when to activate and what to do
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,7 +96,11 @@ pub trait GuidelineMatcher: Send + Sync {
 pub struct DefaultGuidelineMatcher {
     guidelines: Vec<Guideline>,
     aho_corasick: Option<AhoCorasick>,
+    /// Maps pattern index to guideline indices (for handling duplicate patterns)
+    literal_pattern_to_guidelines: HashMap<usize, Vec<usize>>,
     regex_set: Option<RegexSet>,
+    /// Maps pattern index to guideline indices (for handling duplicate patterns)
+    regex_pattern_to_guidelines: HashMap<usize, Vec<usize>>,
     individual_regexes: Vec<Regex>,
 }
 
@@ -104,7 +109,9 @@ impl DefaultGuidelineMatcher {
         Self {
             guidelines: Vec::new(),
             aho_corasick: None,
+            literal_pattern_to_guidelines: HashMap::new(),
             regex_set: None,
+            regex_pattern_to_guidelines: HashMap::new(),
             individual_regexes: Vec::new(),
         }
     }
@@ -112,14 +119,27 @@ impl DefaultGuidelineMatcher {
     /// Rebuild pattern matchers after guidelines change
     fn rebuild_matchers(&mut self) {
         // Build Aho-Corasick automaton for literal conditions
-        let literals: Vec<String> = self
-            .guidelines
-            .iter()
-            .filter_map(|g| match &g.condition {
-                GuidelineCondition::Literal(s) => Some(s.to_lowercase()),
-                _ => None,
-            })
-            .collect();
+        // Track which pattern maps to which guideline indices (handle duplicates)
+        let mut literals: Vec<String> = Vec::new();
+        let mut literal_to_guideline_map: HashMap<String, Vec<usize>> = HashMap::new();
+
+        for (guideline_idx, guideline) in self.guidelines.iter().enumerate() {
+            if let GuidelineCondition::Literal(s) = &guideline.condition {
+                let lowercase = s.to_lowercase();
+                literal_to_guideline_map
+                    .entry(lowercase.clone())
+                    .or_insert_with(Vec::new)
+                    .push(guideline_idx);
+            }
+        }
+
+        // Build unique pattern list and pattern->guidelines mapping
+        self.literal_pattern_to_guidelines.clear();
+        for (pattern, guideline_indices) in literal_to_guideline_map {
+            let pattern_idx = literals.len();
+            literals.push(pattern);
+            self.literal_pattern_to_guidelines.insert(pattern_idx, guideline_indices);
+        }
 
         if !literals.is_empty() {
             self.aho_corasick = Some(
@@ -133,14 +153,25 @@ impl DefaultGuidelineMatcher {
         }
 
         // Build regex set for regex conditions
-        let patterns: Vec<String> = self
-            .guidelines
-            .iter()
-            .filter_map(|g| match &g.condition {
-                GuidelineCondition::Regex(r) => Some(r.clone()),
-                _ => None,
-            })
-            .collect();
+        let mut patterns: Vec<String> = Vec::new();
+        let mut regex_to_guideline_map: HashMap<String, Vec<usize>> = HashMap::new();
+
+        for (guideline_idx, guideline) in self.guidelines.iter().enumerate() {
+            if let GuidelineCondition::Regex(r) = &guideline.condition {
+                regex_to_guideline_map
+                    .entry(r.clone())
+                    .or_insert_with(Vec::new)
+                    .push(guideline_idx);
+            }
+        }
+
+        // Build unique pattern list and pattern->guidelines mapping
+        self.regex_pattern_to_guidelines.clear();
+        for (pattern, guideline_indices) in regex_to_guideline_map {
+            let pattern_idx = patterns.len();
+            patterns.push(pattern);
+            self.regex_pattern_to_guidelines.insert(pattern_idx, guideline_indices);
+        }
 
         if !patterns.is_empty() {
             // Build individual regexes for extraction
@@ -164,15 +195,14 @@ impl DefaultGuidelineMatcher {
         if let Some(ref ac) = self.aho_corasick {
             let lowercase_message = message.to_lowercase();
             for mat in ac.find_iter(&lowercase_message) {
-                // Map match index to guideline index
-                let mut literal_idx = 0;
-                for (guideline_idx, guideline) in self.guidelines.iter().enumerate() {
-                    if let GuidelineCondition::Literal(_) = &guideline.condition {
-                        if literal_idx == mat.pattern().as_usize() {
+                let pattern_idx = mat.pattern().as_usize();
+
+                // Get all guidelines that match this pattern
+                if let Some(guideline_indices) = self.literal_pattern_to_guidelines.get(&pattern_idx) {
+                    for &guideline_idx in guideline_indices {
+                        if let Some(guideline) = self.guidelines.get(guideline_idx) {
                             matches.push((guideline_idx, guideline));
-                            break;
                         }
-                        literal_idx += 1;
                     }
                 }
             }
@@ -186,16 +216,13 @@ impl DefaultGuidelineMatcher {
         let mut matches = Vec::new();
 
         if let Some(ref regex_set) = self.regex_set {
-            for regex_idx in regex_set.matches(message).into_iter() {
-                // Map regex index to guideline index
-                let mut current_regex_idx = 0;
-                for (guideline_idx, guideline) in self.guidelines.iter().enumerate() {
-                    if let GuidelineCondition::Regex(_) = &guideline.condition {
-                        if current_regex_idx == regex_idx {
+            for pattern_idx in regex_set.matches(message).into_iter() {
+                // Get all guidelines that match this pattern
+                if let Some(guideline_indices) = self.regex_pattern_to_guidelines.get(&pattern_idx) {
+                    for &guideline_idx in guideline_indices {
+                        if let Some(guideline) = self.guidelines.get(guideline_idx) {
                             matches.push((guideline_idx, guideline));
-                            break;
                         }
-                        current_regex_idx += 1;
                     }
                 }
             }
@@ -245,10 +272,22 @@ impl GuidelineMatcher for DefaultGuidelineMatcher {
         message: &str,
         _context: &Context,
     ) -> Result<Vec<GuidelineMatch>> {
+        trace!(message = %message, "Starting guideline matching");
         let mut matches = Vec::new();
 
         // Match literal conditions
-        for (_idx, guideline) in self.match_literal_conditions(message) {
+        let literal_matches = self.match_literal_conditions(message);
+        debug!(
+            literal_count = literal_matches.len(),
+            "Literal conditions matched"
+        );
+
+        for (_idx, guideline) in literal_matches {
+            trace!(
+                guideline_id = %guideline.id,
+                priority = guideline.priority,
+                "Literal match found"
+            );
             matches.push(GuidelineMatch {
                 guideline_id: guideline.id,
                 relevance_score: 1.0, // Exact match
@@ -259,8 +298,20 @@ impl GuidelineMatcher for DefaultGuidelineMatcher {
         }
 
         // Match regex conditions
-        for (_idx, guideline) in self.match_regex_conditions(message) {
+        let regex_matches = self.match_regex_conditions(message);
+        debug!(
+            regex_count = regex_matches.len(),
+            "Regex conditions matched"
+        );
+
+        for (_idx, guideline) in regex_matches {
             let params = self.extract_parameters(message, guideline);
+            trace!(
+                guideline_id = %guideline.id,
+                priority = guideline.priority,
+                param_count = params.len(),
+                "Regex match found"
+            );
             matches.push(GuidelineMatch {
                 guideline_id: guideline.id,
                 relevance_score: 0.9, // Regex match
@@ -272,6 +323,12 @@ impl GuidelineMatcher for DefaultGuidelineMatcher {
 
         // TODO: Semantic matching (requires embeddings)
 
+        info!(
+            total_matches = matches.len(),
+            message_length = message.len(),
+            "Guideline matching complete"
+        );
+
         Ok(matches)
     }
 
@@ -280,8 +337,11 @@ impl GuidelineMatcher for DefaultGuidelineMatcher {
         mut matches: Vec<GuidelineMatch>,
     ) -> Option<GuidelineMatch> {
         if matches.is_empty() {
+            debug!("No matches to select from");
             return None;
         }
+
+        debug!(candidate_count = matches.len(), "Selecting best match from candidates");
 
         // Find corresponding guidelines and sort by priority and timestamp
         matches.sort_by(|a, b| {
@@ -303,13 +363,36 @@ impl GuidelineMatcher for DefaultGuidelineMatcher {
             }
         });
 
-        matches.into_iter().next()
+        let best = matches.into_iter().next();
+
+        if let Some(ref selected) = best {
+            if let Some(guideline) = self.guidelines.iter().find(|g| g.id == selected.guideline_id) {
+                info!(
+                    selected_guideline_id = %selected.guideline_id,
+                    priority = guideline.priority,
+                    relevance_score = selected.relevance_score,
+                    "Best match selected"
+                );
+            }
+        }
+
+        best
     }
 
     async fn add_guideline(&mut self, guideline: Guideline) -> Result<GuidelineId> {
         let id = guideline.id;
+        info!(
+            guideline_id = %id,
+            condition = ?guideline.condition,
+            priority = guideline.priority,
+            "Adding guideline to matcher"
+        );
         self.guidelines.push(guideline);
         self.rebuild_matchers();
+        debug!(
+            total_guidelines = self.guidelines.len(),
+            "Guideline added and matchers rebuilt"
+        );
         Ok(id)
     }
 
@@ -348,13 +431,7 @@ mod tests {
 
         matcher.add_guideline(guideline).await.unwrap();
 
-        let context = Context {
-            session_id: crate::types::SessionId::new(),
-            messages: vec![],
-            variables: HashMap::new(),
-            journey_state: None,
-            metadata: HashMap::new(),
-        };
+        let context = Context::new();
 
         let matches = matcher
             .match_guidelines("What is your pricing?", &context)
@@ -385,13 +462,7 @@ mod tests {
 
         matcher.add_guideline(guideline).await.unwrap();
 
-        let context = Context {
-            session_id: crate::types::SessionId::new(),
-            messages: vec![],
-            variables: HashMap::new(),
-            journey_state: None,
-            metadata: HashMap::new(),
-        };
+        let context = Context::new();
 
         let matches = matcher
             .match_guidelines("I want to cancel my subscription", &context)
@@ -406,9 +477,10 @@ mod tests {
     async fn test_priority_resolution() {
         let mut matcher = DefaultGuidelineMatcher::new();
 
+        // Use different but overlapping patterns to properly test priority
         let low_priority = Guideline {
             id: GuidelineId::new(),
-            condition: GuidelineCondition::Literal("test".to_string()),
+            condition: GuidelineCondition::Literal("pricing".to_string()),
             action: GuidelineAction {
                 response_template: "Low".to_string(),
                 requires_llm: false,
@@ -422,7 +494,7 @@ mod tests {
 
         let high_priority = Guideline {
             id: GuidelineId::new(),
-            condition: GuidelineCondition::Literal("test".to_string()),
+            condition: GuidelineCondition::Literal("pricing".to_string()),
             action: GuidelineAction {
                 response_template: "High".to_string(),
                 requires_llm: false,
@@ -434,22 +506,27 @@ mod tests {
             created_at: Utc::now(),
         };
 
+        let low_id = low_priority.id;
         let high_id = high_priority.id;
 
         matcher.add_guideline(low_priority).await.unwrap();
         matcher.add_guideline(high_priority).await.unwrap();
 
-        let context = Context {
-            session_id: crate::types::SessionId::new(),
-            messages: vec![],
-            variables: HashMap::new(),
-            journey_state: None,
-            metadata: HashMap::new(),
-        };
+        let context = Context::new();
 
-        let matches = matcher.match_guidelines("test", &context).await.unwrap();
+        let matches = matcher.match_guidelines("What about pricing?", &context).await.unwrap();
+
+        // Should have 2 matches (both guidelines match "pricing")
+        assert_eq!(matches.len(), 2, "Should match both guidelines");
+
+        // One should be low priority, one should be high priority
+        let low_match = matches.iter().find(|m| m.guideline_id == low_id);
+        let high_match = matches.iter().find(|m| m.guideline_id == high_id);
+        assert!(low_match.is_some(), "Low priority guideline should match");
+        assert!(high_match.is_some(), "High priority guideline should match");
+
+        // select_best_match should pick the high priority one
         let best = matcher.select_best_match(matches).await.unwrap();
-
-        assert_eq!(best.guideline_id, high_id);
+        assert_eq!(best.guideline_id, high_id, "Should select high priority guideline");
     }
 }
