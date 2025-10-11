@@ -1,4 +1,4 @@
-//! Integration test contracts for LlmProvider trait
+//! Integration test contracts for LLMProvider trait
 //!
 //! These tests define the contract that all LLM provider implementations must satisfy.
 //! They use a mock provider to test the interface without requiring actual API calls.
@@ -8,9 +8,9 @@ use futures::Stream;
 use std::pin::Pin;
 use talk::context::Message;
 use talk::error::AgentError;
-use talk::provider::{LlmProvider, ProviderConfig, StreamChunk};
+use talk::provider::{LLMProvider, ProviderConfig, StreamChunk};
 
-/// Mock LLM provider for testing the LlmProvider contract
+/// Mock LLM provider for testing the LLMProvider contract
 #[derive(Debug, Clone)]
 struct MockProvider {
     config: ProviderConfig,
@@ -34,10 +34,10 @@ impl MockProvider {
 }
 
 #[async_trait]
-impl LlmProvider for MockProvider {
+impl LLMProvider for MockProvider {
     async fn complete(&self, _messages: Vec<Message>) -> Result<String, AgentError> {
         if self.should_fail {
-            Err(AgentError::LlmProvider("Mock provider error".into()))
+            Err(AgentError::LLMProvider("Mock provider error".into()))
         } else {
             Ok(self.response.clone())
         }
@@ -48,7 +48,7 @@ impl LlmProvider for MockProvider {
         _messages: Vec<Message>,
     ) -> Result<Pin<Box<dyn Stream<Item = StreamChunk> + Send>>, AgentError> {
         if self.should_fail {
-            return Err(AgentError::LlmProvider("Mock provider error".into()));
+            return Err(AgentError::LLMProvider("Mock provider error".into()));
         }
 
         // Split response into chunks for streaming
@@ -66,7 +66,7 @@ impl LlmProvider for MockProvider {
     }
 }
 
-/// Test the contract for LlmProvider::complete
+/// Test the contract for LLMProvider::complete
 ///
 /// This test verifies that:
 /// - The provider can generate completions for messages
@@ -85,23 +85,23 @@ async fn test_llm_provider_complete_contract() {
     let result = provider.complete(messages).await;
     assert!(
         result.is_ok(),
-        "LlmProvider::complete should succeed with valid messages"
+        "LLMProvider::complete should succeed with valid messages"
     );
     let response = result.unwrap();
     assert!(
         !response.is_empty(),
-        "LlmProvider::complete should return a non-empty response"
+        "LLMProvider::complete should return a non-empty response"
     );
     assert_eq!(
         response, "This is a test response",
-        "LlmProvider::complete should return the expected response"
+        "LLMProvider::complete should return the expected response"
     );
 }
 
-/// Test the contract for LlmProvider::complete with errors
+/// Test the contract for LLMProvider::complete with errors
 ///
 /// This test verifies that:
-/// - Provider errors are properly returned as AgentError::LlmProvider
+/// - Provider errors are properly returned as AgentError::LLMProvider
 /// - Error handling is consistent
 #[tokio::test]
 async fn test_llm_provider_complete_error_contract() {
@@ -113,15 +113,15 @@ async fn test_llm_provider_complete_error_contract() {
     let result = provider.complete(messages).await;
     assert!(
         result.is_err(),
-        "LlmProvider::complete should return error when provider fails"
+        "LLMProvider::complete should return error when provider fails"
     );
     assert!(
-        matches!(result.unwrap_err(), AgentError::LlmProvider(_)),
-        "Error should be AgentError::LlmProvider"
+        matches!(result.unwrap_err(), AgentError::LLMProvider(_)),
+        "Error should be AgentError::LLMProvider"
     );
 }
 
-/// Test the contract for LlmProvider::stream
+/// Test the contract for LLMProvider::stream
 ///
 /// This test verifies that:
 /// - The provider can stream responses
@@ -137,7 +137,7 @@ async fn test_llm_provider_stream_contract() {
     let result = provider.stream(messages).await;
     assert!(
         result.is_ok(),
-        "LlmProvider::stream should succeed with valid messages"
+        "LLMProvider::stream should succeed with valid messages"
     );
 
     let mut stream = result.unwrap();
@@ -156,7 +156,7 @@ async fn test_llm_provider_stream_contract() {
     // Verify chunks were produced
     assert!(
         !chunks.is_empty(),
-        "LlmProvider::stream should produce at least one chunk"
+        "LLMProvider::stream should produce at least one chunk"
     );
 
     // Verify chunks combine to form the complete response
@@ -167,10 +167,10 @@ async fn test_llm_provider_stream_contract() {
     );
 }
 
-/// Test the contract for LlmProvider::stream with errors
+/// Test the contract for LLMProvider::stream with errors
 ///
 /// This test verifies that:
-/// - Stream errors are properly returned as AgentError::LlmProvider
+/// - Stream errors are properly returned as AgentError::LLMProvider
 /// - Error handling is consistent with complete()
 #[tokio::test]
 async fn test_llm_provider_stream_error_contract() {
@@ -182,16 +182,16 @@ async fn test_llm_provider_stream_error_contract() {
     let result = provider.stream(messages).await;
     assert!(
         result.is_err(),
-        "LlmProvider::stream should return error when provider fails"
+        "LLMProvider::stream should return error when provider fails"
     );
 
     // Check error type without using unwrap_err (which requires Debug on Ok type)
     match result {
-        Err(AgentError::LlmProvider(_)) => {
+        Err(AgentError::LLMProvider(_)) => {
             // Success - this is the expected error type
         }
         Err(e) => {
-            panic!("Expected AgentError::LlmProvider, got {:?}", e);
+            panic!("Expected AgentError::LLMProvider, got {:?}", e);
         }
         Ok(_) => {
             panic!("Expected error, got Ok");
@@ -199,7 +199,7 @@ async fn test_llm_provider_stream_error_contract() {
     }
 }
 
-/// Test the contract for LlmProvider::name
+/// Test the contract for LLMProvider::name
 ///
 /// This test verifies that:
 /// - name() returns a non-empty string
@@ -211,16 +211,16 @@ async fn test_llm_provider_name_contract() {
     let name = provider.name();
     assert!(
         !name.is_empty(),
-        "LlmProvider::name should return a non-empty string"
+        "LLMProvider::name should return a non-empty string"
     );
     assert_eq!(
         provider.name(),
         name,
-        "LlmProvider::name should return consistent values"
+        "LLMProvider::name should return consistent values"
     );
 }
 
-/// Test the contract for LlmProvider::config
+/// Test the contract for LLMProvider::config
 ///
 /// This test verifies that:
 /// - config() returns a valid ProviderConfig
@@ -240,7 +240,7 @@ async fn test_llm_provider_config_contract() {
     );
 }
 
-/// Test that LlmProvider implementations handle different message types correctly
+/// Test that LLMProvider implementations handle different message types correctly
 ///
 /// This test verifies that:
 /// - Providers can handle system, user, and assistant messages
@@ -261,11 +261,11 @@ async fn test_llm_provider_message_types_contract() {
     let result = provider.complete(messages).await;
     assert!(
         result.is_ok(),
-        "LlmProvider should handle all message types"
+        "LLMProvider should handle all message types"
     );
 }
 
-/// Test that LlmProvider implementations handle empty message lists
+/// Test that LLMProvider implementations handle empty message lists
 ///
 /// This test verifies that:
 /// - Providers can handle empty message vectors
@@ -280,11 +280,11 @@ async fn test_llm_provider_empty_messages_contract() {
     let result = provider.complete(messages).await;
     assert!(
         result.is_ok() || result.is_err(),
-        "LlmProvider should handle empty messages without panicking"
+        "LLMProvider should handle empty messages without panicking"
     );
 }
 
-/// Test that LlmProvider implementations are thread-safe (Send + Sync)
+/// Test that LLMProvider implementations are thread-safe (Send + Sync)
 ///
 /// This is a compile-time test that verifies the provider can be shared across threads.
 #[tokio::test]
@@ -293,7 +293,7 @@ async fn test_llm_provider_thread_safety_contract() {
     assert_send_sync::<MockProvider>();
 }
 
-/// Test that LlmProvider can be used with async trait
+/// Test that LLMProvider can be used with async trait
 ///
 /// This test verifies that:
 /// - The provider works correctly with async_trait
@@ -318,7 +318,7 @@ async fn test_llm_provider_concurrent_calls_contract() {
         let result = handle.await.unwrap();
         assert!(
             result.is_ok(),
-            "Concurrent LlmProvider calls should succeed"
+            "Concurrent LLMProvider calls should succeed"
         );
     }
 }

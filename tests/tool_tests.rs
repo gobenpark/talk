@@ -3,10 +3,10 @@
 //! Tests tool registration, execution, parameter validation, error handling,
 //! and timeout behavior following TDD principles.
 
-use talk::*;
 use serde_json::json;
 use std::collections::HashMap;
 use std::time::Duration;
+use talk::*;
 
 /// Mock tool that echoes input parameters
 struct EchoTool {
@@ -52,10 +52,7 @@ impl Tool for EchoTool {
         &self.parameters
     }
 
-    async fn execute(
-        &self,
-        parameters: HashMap<String, serde_json::Value>,
-    ) -> Result<ToolResult> {
+    async fn execute(&self, parameters: HashMap<String, serde_json::Value>) -> Result<ToolResult> {
         Ok(ToolResult {
             output: serde_json::to_value(parameters).unwrap(),
             error: None,
@@ -99,10 +96,7 @@ impl Tool for SlowTool {
         &self.parameters
     }
 
-    async fn execute(
-        &self,
-        _parameters: HashMap<String, serde_json::Value>,
-    ) -> Result<ToolResult> {
+    async fn execute(&self, _parameters: HashMap<String, serde_json::Value>) -> Result<ToolResult> {
         tokio::time::sleep(self.delay).await;
 
         Ok(ToolResult {
@@ -146,10 +140,7 @@ impl Tool for FailingTool {
         &self.parameters
     }
 
-    async fn execute(
-        &self,
-        _parameters: HashMap<String, serde_json::Value>,
-    ) -> Result<ToolResult> {
+    async fn execute(&self, _parameters: HashMap<String, serde_json::Value>) -> Result<ToolResult> {
         Err(AgentError::ToolExecutionFailed {
             tool_name: "failing".to_string(),
             reason: "Simulated failure".to_string(),
@@ -185,9 +176,7 @@ async fn test_register_duplicate_tool_fails() {
         .await
         .expect("First registration should succeed");
 
-    let result = tool_registry
-        .register(Box::new(echo_tool2))
-        .await;
+    let result = tool_registry.register(Box::new(echo_tool2)).await;
 
     assert!(result.is_err());
     assert!(matches!(
@@ -232,10 +221,7 @@ async fn test_get_tool_by_id() {
     let tool_registry = ToolRegistry::new();
     let echo_tool = EchoTool::new();
 
-    let tool_id = tool_registry
-        .register(Box::new(echo_tool))
-        .await
-        .unwrap();
+    let tool_id = tool_registry.register(Box::new(echo_tool)).await.unwrap();
 
     let retrieved = tool_registry.get(&tool_id).await;
     assert!(retrieved.is_some());
@@ -251,10 +237,7 @@ async fn test_execute_tool_basic() {
     let tool_registry = ToolRegistry::new();
     let echo_tool = EchoTool::new();
 
-    let tool_id = tool_registry
-        .register(Box::new(echo_tool))
-        .await
-        .unwrap();
+    let tool_id = tool_registry.register(Box::new(echo_tool)).await.unwrap();
 
     let mut params = HashMap::new();
     params.insert("message".to_string(), json!("Hello"));
@@ -273,10 +256,7 @@ async fn test_execute_tool_multiple_times() {
     let echo_tool = EchoTool::new();
     let tool_registry = ToolRegistry::new();
 
-    let tool_id = tool_registry
-        .register(Box::new(echo_tool))
-        .await
-        .unwrap();
+    let tool_id = tool_registry.register(Box::new(echo_tool)).await.unwrap();
 
     // Execute multiple times
     for i in 0..5 {
@@ -300,10 +280,7 @@ async fn test_execute_nonexistent_tool_fails() {
     let result = tool_registry.execute(&fake_id, params).await;
 
     assert!(result.is_err());
-    assert!(matches!(
-        result.unwrap_err(),
-        AgentError::ToolNotFound(_)
-    ));
+    assert!(matches!(result.unwrap_err(), AgentError::ToolNotFound(_)));
 }
 
 // ============================================================================
@@ -571,10 +548,7 @@ async fn test_tool_execution_timeout() {
     let tool_registry = ToolRegistry::new();
     let slow_tool = SlowTool::new(Duration::from_secs(5));
 
-    let tool_id = tool_registry
-        .register(Box::new(slow_tool))
-        .await
-        .unwrap();
+    let tool_id = tool_registry.register(Box::new(slow_tool)).await.unwrap();
 
     let params = HashMap::new();
 
@@ -597,10 +571,7 @@ async fn test_tool_execution_within_timeout() {
     let tool_registry = ToolRegistry::new();
     let slow_tool = SlowTool::new(Duration::from_millis(100));
 
-    let tool_id = tool_registry
-        .register(Box::new(slow_tool))
-        .await
-        .unwrap();
+    let tool_id = tool_registry.register(Box::new(slow_tool)).await.unwrap();
 
     let params = HashMap::new();
 

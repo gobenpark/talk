@@ -5,12 +5,12 @@
 //!
 //! Run with: cargo run --example simple_agent
 
-use talk::{
-    Agent, AgentConfig, Guideline, GuidelineAction, GuidelineCondition, GuidelineId, LogLevel,
-    LlmProvider, Message, ProviderConfig,
-};
 use std::collections::HashMap;
 use std::time::Duration;
+use talk::{
+    Agent, AgentConfig, Guideline, GuidelineAction, GuidelineCondition, GuidelineId, LLMProvider,
+    LogLevel, Message, ProviderConfig,
+};
 
 /// Mock LLM provider for demonstration purposes
 struct MockProvider {
@@ -33,11 +33,8 @@ impl MockProvider {
 }
 
 #[async_trait::async_trait]
-impl LlmProvider for MockProvider {
-    async fn complete(
-        &self,
-        messages: Vec<Message>,
-    ) -> Result<String, talk::AgentError> {
+impl LLMProvider for MockProvider {
+    async fn complete(&self, messages: Vec<Message>) -> Result<String, talk::AgentError> {
         // In a real implementation, this would call an actual LLM API
         // For this example, we'll generate a simple response
         let last_message = messages
@@ -55,9 +52,7 @@ impl LlmProvider for MockProvider {
         &self,
         _messages: Vec<Message>,
     ) -> Result<
-        std::pin::Pin<
-            Box<dyn futures::Stream<Item = Result<String, talk::AgentError>> + Send>,
-        >,
+        std::pin::Pin<Box<dyn futures::Stream<Item = Result<String, talk::AgentError>> + Send>>,
         talk::AgentError,
     > {
         unimplemented!("Streaming not implemented in mock provider")
@@ -133,7 +128,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         id: GuidelineId::new(),
         condition: GuidelineCondition::Regex(r"^(hi|hello|hey|greetings)".to_string()),
         action: GuidelineAction {
-            response_template: "Hello! 👋 Welcome to our support chat. How can I help you today?".to_string(),
+            response_template: "Hello! 👋 Welcome to our support chat. How can I help you today?"
+                .to_string(),
             requires_llm: false,
             parameters: vec![],
         },
@@ -142,6 +138,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         parameters: HashMap::new(),
         created_at: chrono::Utc::now(),
     };
+
+    let sample_guideline = Guideline {
+        id: GuidelineId::new(),
+        condition: GuidelineCondition::Literal("sample".to_string()),
+        action: GuidelineAction {
+            response_template: "This is a sample guideline response.".to_string(),
+            requires_llm: false,
+            parameters: vec![],
+        },
+        priority: 1,
+        tools: vec![],
+        parameters: HashMap::new(),
+        created_at: chrono::Utc::now(),
+    };
+    agent.add_guideline(sample_guideline).await?;
 
     agent.add_guideline(greeting_guideline).await?;
     println!("✓ Added guideline: greeting (regex match, priority 3)\n");

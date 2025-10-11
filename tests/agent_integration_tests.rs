@@ -125,7 +125,7 @@ struct MockProvider {
 }
 
 #[async_trait::async_trait]
-impl talk::LlmProvider for MockProvider {
+impl talk::LLMProvider for MockProvider {
     async fn complete(&self, _messages: Vec<talk::Message>) -> Result<String, talk::AgentError> {
         Ok("Mock LLM response".to_string())
     }

@@ -6,7 +6,7 @@
 use crate::context::{Context, Message};
 use crate::error::{AgentError, Result};
 use crate::guideline::{Guideline, GuidelineMatch, GuidelineMatcher, DefaultGuidelineMatcher, GuidelineCondition, GuidelineAction};
-use crate::provider::LlmProvider;
+use crate::provider::LLMProvider;
 use crate::session::{Session, SessionStatus};
 use crate::storage::SessionStore;
 use crate::types::{AgentId, GuidelineId, SessionId, ToolId, StepId};
@@ -124,7 +124,7 @@ pub struct Agent {
     id: AgentId,
     name: String,
     description: Option<String>,
-    provider: Box<dyn LlmProvider>,
+    provider: Box<dyn LLMProvider>,
     guideline_matcher: Arc<RwLock<DefaultGuidelineMatcher>>,
     fallback_guideline: Guideline,
     config: AgentConfig,
@@ -304,7 +304,7 @@ impl Agent {
 pub struct AgentBuilder {
     name: Option<String>,
     description: Option<String>,
-    provider: Option<Box<dyn LlmProvider>>,
+    provider: Option<Box<dyn LLMProvider>>,
     config: AgentConfig,
     session_store: Option<Arc<dyn SessionStore>>,
 }
@@ -330,7 +330,7 @@ impl AgentBuilder {
         self
     }
 
-    pub fn provider(mut self, provider: Box<dyn LlmProvider>) -> Self {
+    pub fn provider(mut self, provider: Box<dyn LLMProvider>) -> Self {
         self.provider = Some(provider);
         self
     }

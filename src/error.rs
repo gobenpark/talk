@@ -11,7 +11,7 @@ use thiserror::Error;
 pub enum AgentError {
     /// LLM provider error
     #[error("LLM provider error: {0}")]
-    LlmProvider(#[from] Box<dyn std::error::Error + Send + Sync>),
+    LLMProvider(#[from] Box<dyn std::error::Error + Send + Sync>),
 
     /// Session not found
     #[error("Session not found: {0}")]

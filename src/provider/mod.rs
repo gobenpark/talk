@@ -88,7 +88,7 @@ pub type StreamChunk = std::result::Result<String, AgentError>;
 /// This trait defines the interface that all LLM providers must implement
 /// to be compatible with the Talk agent framework.
 #[async_trait]
-pub trait LlmProvider: Send + Sync {
+pub trait LLMProvider: Send + Sync {
     /// Generate a complete response for the given messages
     ///
     /// # Arguments

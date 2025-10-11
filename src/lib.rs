@@ -51,7 +51,7 @@ pub use guideline::{
     DefaultGuidelineMatcher, Guideline, GuidelineAction, GuidelineCondition, GuidelineMatch,
     GuidelineMatcher, ParameterDef,
 };
-pub use provider::{LlmProvider, ProviderConfig, StreamChunk};
+pub use provider::{LLMProvider, ProviderConfig, StreamChunk};
 pub use session::{JourneyState, Session, SessionStatus};
 pub use storage::{memory::InMemorySessionStore, SessionStore};
 pub use tool::{ParameterSchema, Tool, ToolRegistry, ToolResult};
