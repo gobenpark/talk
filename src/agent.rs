@@ -124,7 +124,60 @@ pub struct ResponseExplanation {
     pub confidence: f32,
 }
 
-/// Main Agent struct
+/// Main Agent struct for creating and managing LLM-based conversational agents.
+///
+/// An `Agent` orchestrates guidelines, tools, journeys, and LLM interactions to provide
+/// controlled, predictable AI behavior. It manages session state, context tracking, and
+/// provides explainability features for debugging agent decisions.
+///
+/// # Examples
+///
+/// Basic agent with guidelines:
+///
+/// ```no_run
+/// use talk::{Agent, Guideline, GuidelineCondition, GuidelineAction, OpenAIProvider};
+///
+/// # #[tokio::main]
+/// # async fn main() -> talk::Result<()> {
+/// let provider = OpenAIProvider::new("api-key".to_string());
+/// let mut agent = Agent::builder()
+///     .name("Support Bot")
+///     .description("Customer support agent")
+///     .provider(Box::new(provider))
+///     .build()?;
+///
+/// // Add guideline
+/// let guideline = Guideline {
+///     id: talk::GuidelineId::new(),
+///     condition: GuidelineCondition::Literal("help".to_string()),
+///     action: GuidelineAction {
+///         response_template: "How can I help you?".to_string(),
+///         requires_llm: false,
+///         parameters: vec![],
+///     },
+///     priority: 10,
+///     tools: vec![],
+///     parameters: Default::default(),
+///     created_at: chrono::Utc::now(),
+/// };
+/// agent.add_guideline(guideline).await?;
+///
+/// // Create session and process message
+/// let session_id = agent.create_session().await?;
+/// let response = agent.process_message(session_id, "help".to_string()).await?;
+/// println!("{}", response.message);
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Architecture
+///
+/// The agent coordinates several subsystems:
+/// - **GuidelineMatcher**: Pattern matching and conflict resolution
+/// - **ToolRegistry**: Async tool execution with timeout/retry
+/// - **JourneyManager**: Multi-step conversation state machines
+/// - **SessionStore**: Persistent or in-memory session storage
+/// - **LLMProvider**: Pluggable LLM backend (OpenAI, Anthropic)
 pub struct Agent {
     id: AgentId,
     name: String,
