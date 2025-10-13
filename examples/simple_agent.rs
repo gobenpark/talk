@@ -8,75 +8,21 @@
 use std::collections::HashMap;
 use std::time::Duration;
 use talk::{
-    Agent, AgentConfig, Guideline, GuidelineAction, GuidelineCondition, GuidelineId, LLMProvider,
-    LogLevel, Message, ProviderConfig,
+    Agent, AgentConfig, Guideline, GuidelineAction, GuidelineCondition, GuidelineId, LLMProvider, LogLevel, Message, OpenAIProvider, ProviderConfig
 };
 
-/// Mock LLM provider for demonstration purposes
-struct MockProvider {
-    config: ProviderConfig,
-}
-
-impl MockProvider {
-    fn new() -> Self {
-        Self {
-            config: ProviderConfig {
-                model: "mock-model".to_string(),
-                temperature: 0.7,
-                max_tokens: Some(1000),
-                top_p: None,
-                frequency_penalty: None,
-                presence_penalty: None,
-            },
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl LLMProvider for MockProvider {
-    async fn complete(&self, messages: Vec<Message>) -> Result<String, talk::AgentError> {
-        // In a real implementation, this would call an actual LLM API
-        // For this example, we'll generate a simple response
-        let last_message = messages
-            .last()
-            .map(|m| m.content.as_str())
-            .unwrap_or("Hello");
-
-        Ok(format!(
-            "I'm a helpful assistant. You said: '{}'. How can I help you today?",
-            last_message
-        ))
-    }
-
-    async fn stream(
-        &self,
-        _messages: Vec<Message>,
-    ) -> Result<
-        std::pin::Pin<Box<dyn futures::Stream<Item = Result<String, talk::AgentError>> + Send>>,
-        talk::AgentError,
-    > {
-        unimplemented!("Streaming not implemented in mock provider")
-    }
-
-    fn name(&self) -> &str {
-        "MockProvider"
-    }
-
-    fn config(&self) -> &ProviderConfig {
-        &self.config
-    }
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🤖 Simple Agent Example\n");
-    println!("This example demonstrates basic guideline matching with a customer support agent.\n");
+
+
+    let provider = OpenAIProvider::new("");
 
     // Create agent with mock provider
     let mut agent = Agent::builder()
         .name("Customer Support Agent")
         .description("A helpful customer support assistant")
-        .provider(Box::new(MockProvider::new()))
+        .provider(Box::new(provider))
         .config(AgentConfig {
             max_context_messages: 100,
             default_tool_timeout: Duration::from_secs(30),

@@ -194,6 +194,9 @@ pub mod tool;
 // Journey system
 pub mod journey;
 
+// Embedding module (optional, requires semantic-matching feature)
+pub mod embedding;
+
 // Public API exports will be added as modules are implemented
 pub use agent::{
     Agent, AgentBuilder, AgentConfig, AgentResponse, LogLevel, ResponseExplanation, ToolExecution,
@@ -213,3 +216,7 @@ pub use session::{Session, SessionStatus};
 pub use storage::{memory::InMemorySessionStore, SessionStore};
 pub use tool::{ParameterSchema, Tool, ToolRegistry, ToolResult};
 pub use types::*;
+
+// Semantic matching exports (only available with feature)
+#[cfg(feature = "semantic-matching")]
+pub use embedding::{cosine_similarity, SentenceEmbedder};

@@ -11,7 +11,12 @@ use chrono::{DateTime, Utc};
 use regex::{Regex, RegexSet};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tracing::{debug, info, trace};
+use tracing::{debug, info, trace, warn};
+
+#[cfg(feature = "semantic-matching")]
+use crate::embedding::SentenceEmbedder;
+#[cfg(feature = "semantic-matching")]
+use std::sync::Arc;
 
 /// Behavioral guideline defining when to activate and what to do
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,6 +63,7 @@ pub struct ParameterDef {
 pub struct GuidelineMatch {
     pub guideline_id: GuidelineId,
     pub relevance_score: f32,
+    pub semantic_score: f32,
     pub matched_condition: String,
     pub extracted_parameters: HashMap<String, serde_json::Value>,
     pub explanation: Option<String>,
@@ -96,6 +102,8 @@ pub struct DefaultGuidelineMatcher {
     /// Maps pattern index to guideline indices (for handling duplicate patterns)
     regex_pattern_to_guidelines: HashMap<usize, Vec<usize>>,
     individual_regexes: Vec<Regex>,
+    #[cfg(feature = "semantic-matching")]
+    embedder: Option<Arc<SentenceEmbedder>>,
 }
 
 impl DefaultGuidelineMatcher {
@@ -107,6 +115,22 @@ impl DefaultGuidelineMatcher {
             regex_set: None,
             regex_pattern_to_guidelines: HashMap::new(),
             individual_regexes: Vec::new(),
+            #[cfg(feature = "semantic-matching")]
+            embedder: None,
+        }
+    }
+
+    /// Create a new matcher with semantic matching enabled
+    #[cfg(feature = "semantic-matching")]
+    pub fn with_embedder(embedder: Arc<SentenceEmbedder>) -> Self {
+        Self {
+            guidelines: Vec::new(),
+            aho_corasick: None,
+            literal_pattern_to_guidelines: HashMap::new(),
+            regex_set: None,
+            regex_pattern_to_guidelines: HashMap::new(),
+            individual_regexes: Vec::new(),
+            embedder: Some(embedder),
         }
     }
 
@@ -253,6 +277,53 @@ impl DefaultGuidelineMatcher {
 
         params
     }
+
+    /// Match semantic conditions using embeddings
+    #[cfg(feature = "semantic-matching")]
+    fn match_semantic_conditions(&self, message: &str) -> Vec<(usize, &Guideline, f32)> {
+        let mut matches = Vec::new();
+
+        if let Some(ref embedder) = self.embedder {
+            for (idx, guideline) in self.guidelines.iter().enumerate() {
+                if let GuidelineCondition::Semantic { description, threshold } = &guideline.condition {
+                    match embedder.similarity(message, description) {
+                        Ok(similarity) if similarity >= *threshold => {
+                            trace!(
+                                guideline_id = %guideline.id,
+                                similarity = similarity,
+                                threshold = threshold,
+                                "Semantic match found"
+                            );
+                            matches.push((idx, guideline, similarity));
+                        }
+                        Ok(similarity) => {
+                            trace!(
+                                guideline_id = %guideline.id,
+                                similarity = similarity,
+                                threshold = threshold,
+                                "Semantic match below threshold"
+                            );
+                        }
+                        Err(e) => {
+                            warn!(
+                                guideline_id = %guideline.id,
+                                error = %e,
+                                "Failed to calculate semantic similarity"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        matches
+    }
+
+    /// Stub for when semantic-matching feature is disabled
+    #[cfg(not(feature = "semantic-matching"))]
+    fn match_semantic_conditions(&self, _message: &str) -> Vec<(usize, &Guideline, f32)> {
+        Vec::new()
+    }
 }
 
 impl Default for DefaultGuidelineMatcher {
@@ -287,6 +358,7 @@ impl GuidelineMatcher for DefaultGuidelineMatcher {
             matches.push(GuidelineMatch {
                 guideline_id: guideline.id,
                 relevance_score: 1.0, // Exact match
+                semantic_score: 0.0,
                 matched_condition: format!("{:?}", guideline.condition),
                 extracted_parameters: HashMap::new(),
                 explanation: Some("Exact literal match".to_string()),
@@ -311,13 +383,36 @@ impl GuidelineMatcher for DefaultGuidelineMatcher {
             matches.push(GuidelineMatch {
                 guideline_id: guideline.id,
                 relevance_score: 0.9, // Regex match
+                semantic_score: 0.0,
                 matched_condition: format!("{:?}", guideline.condition),
                 extracted_parameters: params,
                 explanation: Some("Regex pattern match".to_string()),
             });
         }
 
-        // TODO: Semantic matching (requires embeddings)
+        // Match semantic conditions
+        let semantic_matches = self.match_semantic_conditions(message);
+        debug!(
+            semantic_count = semantic_matches.len(),
+            "Semantic conditions matched"
+        );
+
+        for (_idx, guideline, similarity) in semantic_matches {
+            trace!(
+                guideline_id = %guideline.id,
+                priority = guideline.priority,
+                similarity = similarity,
+                "Semantic match found"
+            );
+            matches.push(GuidelineMatch {
+                guideline_id: guideline.id,
+                relevance_score: similarity, // Use similarity as relevance
+                semantic_score: similarity,
+                matched_condition: format!("{:?}", guideline.condition),
+                extracted_parameters: HashMap::new(),
+                explanation: Some(format!("Semantic match (similarity: {:.2})", similarity)),
+            });
+        }
 
         info!(
             total_matches = matches.len(),

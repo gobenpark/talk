@@ -378,6 +378,7 @@ impl Agent {
             Some(GuidelineMatch {
                 guideline_id: self.fallback_guideline.id,
                 relevance_score: 0.5,
+                semantic_score: 0.0,
                 matched_condition: "fallback".to_string(),
                 extracted_parameters: HashMap::new(),
                 explanation: Some("No matching guideline found, using fallback".to_string()),
@@ -500,7 +501,7 @@ impl Agent {
                 ),
                 confidence: guideline_match
                     .as_ref()
-                    .map(|m| m.relevance_score)
+                    .map(|m| Self::calculate_confidence(m.relevance_score, m.semantic_score))
                     .unwrap_or(0.5),
             })
         } else {
@@ -537,6 +538,29 @@ impl Agent {
         messages.extend(context.messages.clone());
 
         messages
+    }
+
+    /// Calculate confidence based on relevance and semantic scores
+    ///
+    /// Uses a hybrid approach combining pattern matching and semantic similarity:
+    /// - Literal match (1.0): 70% pattern + 30% semantic
+    /// - Regex match (0.9): 60% pattern + 40% semantic
+    /// - Semantic only (relevance < 0.9 AND semantic > 0): 80% semantic (with penalty)
+    /// - Fallback: 50% baseline
+    fn calculate_confidence(relevance_score: f32, semantic_score: f32) -> f32 {
+        if relevance_score >= 1.0 {
+            // Literal match - high confidence in pattern, boost with semantic
+            relevance_score * 0.7 + semantic_score * 0.3
+        } else if relevance_score >= 0.9 {
+            // Regex match - balanced confidence
+            relevance_score * 0.6 + semantic_score * 0.4
+        } else if semantic_score > 0.0 {
+            // Semantic-only match - apply penalty for lack of exact pattern match
+            semantic_score * 0.8
+        } else {
+            // Use relevance score as-is (fallback case)
+            relevance_score
+        }
     }
 }
 

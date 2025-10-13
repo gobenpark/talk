@@ -21,6 +21,7 @@ Talk enables developers to create production-ready AI agents with predictable be
 ## Features
 
 - 🎯 **Behavioral Guidelines**: Define predictable agent behavior with pattern matching and priority-based execution
+- 🧠 **Semantic Matching**: Vector similarity matching using embeddings for intent understanding (optional)
 - 🔧 **Tool Integration**: Register async functions as tools with configurable timeouts
 - 🗺️ **Conversation Journeys**: Multi-step conversation state machines for guided user flows
 - 🔌 **Pluggable LLM Providers**: Built-in support for OpenAI and Anthropic with trait-based extensibility
@@ -91,9 +92,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 cargo add talk tokio --features tokio/full
 ```
 
-### With Optional Storage Backends
+### With Optional Features
 
 ```bash
+# Semantic matching with embeddings
+cargo add talk --features semantic-matching
+
 # Redis storage
 cargo add talk --features redis-storage
 
@@ -145,6 +149,46 @@ Qualify leads, answer product questions, and route to human agents when needed.
 HIPAA-compliant appointment booking with strict behavioral guidelines.
 
 ## More Examples
+
+### Semantic Matching with Embeddings
+
+```rust
+use talk::{Agent, Guideline, GuidelineCondition, GuidelineAction, SentenceEmbedder, DefaultGuidelineMatcher};
+use std::sync::Arc;
+
+// Create embedder (requires semantic-matching feature)
+let embedder = Arc::new(SentenceEmbedder::new()?);
+let matcher = DefaultGuidelineMatcher::with_embedder(embedder);
+
+// Add semantic guideline - matches similar meanings
+let guideline = Guideline {
+    condition: GuidelineCondition::Semantic {
+        description: "pricing, cost, price, fee, payment".to_string(),
+        threshold: 0.7,  // 70% similarity required
+    },
+    action: GuidelineAction {
+        response_template: "Our pricing starts at $49/month".to_string(),
+        requires_llm: false,
+        parameters: vec![],
+    },
+    priority: 10,
+    ..Default::default()
+};
+
+agent.add_guideline(guideline).await?;
+
+// All these will match the semantic guideline:
+// "What's the cost?"
+// "How much does it cost?"
+// "Tell me about fees"
+// "What are your prices?"
+```
+
+**Benefits of Semantic Matching**:
+- Matches intent, not just keywords ("cost" matches "pricing")
+- Handles variations and synonyms automatically
+- Works across languages with multilingual models
+- Reduces need for extensive regex patterns
 
 ### Tool Integration with Retry
 
@@ -243,6 +287,7 @@ let agent = Agent::builder()
 See the `examples/` directory for complete, runnable examples:
 
 - **`simple_agent.rs`** - Basic agent with behavioral guidelines
+- **`semantic_agent.rs`** - Semantic matching with embeddings (requires `--features semantic-matching`)
 - **`weather_agent.rs`** - Agent with async tool integration and API calls
 - **`onboarding_journey.rs`** - Multi-step conversation flow with state tracking
 - **`weather_agent_live.rs`** - Real-world weather agent (requires API key)
@@ -351,7 +396,7 @@ Talk requires **Rust 1.90+** for modern async/await features and trait improveme
 ### v0.2.0 (Q1 2025)
 - [ ] Context variable extraction and validation
 - [ ] Response explainability API
-- [ ] Semantic guideline matching (embeddings)
+- [x] Semantic guideline matching (embeddings) ✅
 - [ ] Streaming LLM responses
 
 ### v0.3.0 (Q2 2025)

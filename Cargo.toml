@@ -39,6 +39,7 @@ default = []
 redis-storage = ["dep:redis"]
 postgres-storage = ["dep:sqlx"]
 all-storage = ["redis-storage", "postgres-storage"]
+semantic-matching = ["dep:rust-bert", "dep:tch"]
 
 [dependencies.redis]
 version = "0.27"
@@ -49,6 +50,14 @@ features = ["tokio-comp", "connection-manager"]
 version = "0.8"
 optional = true
 features = ["runtime-tokio", "postgres"]
+
+[dependencies.rust-bert]
+version = "0.23"
+optional = true
+
+[dependencies.tch]
+version = "0.17"
+optional = true
 
 # Configuration for docs.rs
 [package.metadata.docs.rs]
