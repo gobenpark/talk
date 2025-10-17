@@ -1,0 +1,16 @@
+{
+  "procMacro": {
+    "enable": true,
+    "attributes": {
+      "enable": true
+    }
+  },
+  "cargo": {
+    "features": [],
+    "loadOutDirsFromCheck": true
+  },
+  "check": {
+    "allTargets": false,
+    "command": "clippy"
+  }
+}
