@@ -187,15 +187,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let provider: Box<dyn LLMProvider> = if let Ok(openai_key) = std::env::var("OPENAI_API_KEY") {
         println!("✅ Using OpenAI GPT-4o");
         Box::new(
-            OpenAIProvider::new(openai_key)
-                .with_model("gpt-4o")
+            OpenAIProvider::new(openai_key, "gpt-4o")
                 .with_temperature(0.7),
         )
     } else if let Ok(anthropic_key) = std::env::var("ANTHROPIC_API_KEY") {
         println!("✅ Using Anthropic Claude Sonnet 4.5");
         Box::new(
-            AnthropicProvider::new(anthropic_key)
-                .with_model("claude-sonnet-4-5-20250929")
+            AnthropicProvider::new(anthropic_key, "claude-sonnet-4-5-20250929")
                 .with_temperature(0.7),
         )
     } else {

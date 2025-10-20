@@ -39,8 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .name("Customer Service Agent")
         .description("An empathetic AI agent that handles customer complaints efficiently.")
         .provider(Box::new(
-            OpenAIProvider::new(api_key)
-                .with_model("gpt-4")
+            OpenAIProvider::new(api_key, "gpt-4")
                 .with_temperature(0.7),
         ))
         .config(AgentConfig {

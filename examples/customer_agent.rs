@@ -7,10 +7,10 @@ use talk::{
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Setup LLM provider
+    
     let provider: Box<dyn LLMProvider> = if let Ok(openai_key) = std::env::var("OPENAI_API_KEY") {
         Box::new(
-            OpenAIProvider::new(openai_key)
-                .with_model("gpt-4")
+            OpenAIProvider::new(openai_key, "gpt-4")
         )
     } else {
         return Err("OPENAI_API_KEY not found".into());

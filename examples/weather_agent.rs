@@ -96,8 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create OpenAI provider
     // Note: Set OPENAI_API_KEY environment variable
     let provider = match std::env::var("OPENAI_API_KEY") {
-        Ok(api_key) => OpenAIProvider::new(api_key)
-            .with_model("gpt-3.5-turbo")
+        Ok(api_key) => OpenAIProvider::new(api_key, "gpt-3.5-turbo")
             .with_temperature(0.7),
         Err(_) => {
             println!("⚠️  OPENAI_API_KEY not set. Using mock provider.");

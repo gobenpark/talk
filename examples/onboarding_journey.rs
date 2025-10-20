@@ -44,8 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .name("Flight Booking Agent")
         .description("An AI travel agent that helps customers book flights through a guided journey.")
         .provider(Box::new(
-            OpenAIProvider::new(api_key)
-                .with_model("gpt-4")
+            OpenAIProvider::new(api_key, "gpt-4")
                 .with_temperature(0.7),
         ))
         .config(AgentConfig {

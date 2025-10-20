@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 use talk::{
-    Agent, AgentConfig, Guideline, GuidelineAction, GuidelineCondition, GuidelineId, LLMProvider, LogLevel, Message, OpenAIProvider, ProviderConfig
+    Agent, AgentConfig, Guideline, GuidelineAction, GuidelineCondition, GuidelineId, LogLevel, OpenAIProvider
 };
 
 
@@ -16,7 +16,7 @@ use talk::{
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 
-    let provider = OpenAIProvider::new("");
+    let provider = OpenAIProvider::new("", "gpt-4");
 
     // Create agent with mock provider
     let mut agent = Agent::builder()

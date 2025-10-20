@@ -32,17 +32,18 @@ impl OpenAIProvider {
     /// # Arguments
     ///
     /// * `api_key` - OpenAI API key
+    /// * `model` - Model name to use (e.g., "gpt-4", "gpt-3.5-turbo")
     ///
     /// # Returns
     ///
-    /// A new OpenAI provider instance with default configuration (gpt-4)
-    pub fn new(api_key: impl Into<String>) -> Self {
+    /// A new OpenAI provider instance
+    pub fn new(api_key: impl Into<String>, model: impl Into<String>) -> Self {
         let openai_config = OpenAIConfig::new().with_api_key(api_key);
         let client = Client::with_config(openai_config);
 
         Self {
             client,
-            config: ProviderConfig::new("gpt-4"),
+            config: ProviderConfig::new(model),
         }
     }
 
@@ -56,7 +57,12 @@ impl OpenAIProvider {
             AgentError::Configuration("OPENAI_API_KEY environment variable not set".to_string())
         })?;
 
-        Ok(Self::new(api_key))
+        let model = std::env::var("OPENAI_MODEL")
+            .map_err(|_| {
+                AgentError::Configuration("OPENAI_MODEL environment variable not set".to_string())
+            })?;
+
+        Ok(Self::new(api_key, model))
     }
 
     /// Set the model to use
@@ -263,7 +269,7 @@ mod tests {
 
     #[test]
     fn test_openai_provider_creation() {
-        let provider = OpenAIProvider::new("test-api-key");
+        let provider = OpenAIProvider::new("test-api-key", "gpt-4");
         assert_eq!(provider.name(), "OpenAI");
         assert_eq!(provider.config().model, "gpt-4");
         assert_eq!(provider.config().temperature, 0.7);
@@ -271,25 +277,25 @@ mod tests {
 
     #[test]
     fn test_openai_provider_with_model() {
-        let provider = OpenAIProvider::new("test-api-key").with_model("gpt-3.5-turbo");
+        let provider = OpenAIProvider::new("test-api-key", "gpt-4").with_model("gpt-3.5-turbo");
         assert_eq!(provider.config().model, "gpt-3.5-turbo");
     }
 
     #[test]
     fn test_openai_provider_with_temperature() {
-        let provider = OpenAIProvider::new("test-api-key").with_temperature(0.5);
+        let provider = OpenAIProvider::new("test-api-key", "gpt-4").with_temperature(0.5);
         assert_eq!(provider.config().temperature, 0.5);
     }
 
     #[test]
     fn test_openai_provider_with_max_tokens() {
-        let provider = OpenAIProvider::new("test-api-key").with_max_tokens(1000);
+        let provider = OpenAIProvider::new("test-api-key", "gpt-4").with_max_tokens(1000);
         assert_eq!(provider.config().max_tokens, Some(1000));
     }
 
     #[test]
     fn test_message_conversion() {
-        let provider = OpenAIProvider::new("test-api-key");
+        let provider = OpenAIProvider::new("test-api-key", "gpt-4");
         let messages = vec![
             Message::system("You are a helpful assistant"),
             Message::user("Hello"),
